@@ -47,6 +47,7 @@ const corsConfig = {
         'https://scl.yychuiyan.com',
         'https://scl-admin.yychuiyan.com',
         'https://scl-be.yychuiyan.com',
+        'http://127.0.0.1:9898',
       ];
 
       // 允许没有 origin 的请求（如移动应用、Postman等）
