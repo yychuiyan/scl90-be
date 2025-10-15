@@ -43,7 +43,11 @@ const corsConfig = {
   production: {
     origin: function (origin, callback) {
       // 允许的域名列表 - 在生产环境中应该配置实际的前端域名
-      const allowedOrigins = ['https://scl.yychuiyan.com/', 'https://scl-admin.yychuiyan.com/'];
+      const allowedOrigins = [
+        'https://scl.yychuiyan.com/',
+        'https://scl-admin.yychuiyan.com/',
+        'https://scl-be.yychuiyan.com/',
+      ];
 
       // 允许没有 origin 的请求（如移动应用、Postman等）
       if (!origin) return callback(null, true);
