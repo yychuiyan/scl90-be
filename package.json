@@ -1,0 +1,31 @@
+{
+  "name": "scl90-access-tracker",
+  "version": "1.0.0",
+  "description": "SCL90访问追踪系统",
+  "main": "server.js",
+  "scripts": {
+    "start": "NODE_ENV=production node server.js",
+    "dev": "NODE_ENV=development nodemon server.js",
+    "test": "NODE_ENV=test jest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongodb": "^5.7.0",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "eslint": "^8.52.0"
+  },
+  "keywords": [
+    "scl90",
+    "access",
+    "tracker",
+    "mongodb",
+    "express"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
