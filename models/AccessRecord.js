@@ -24,7 +24,7 @@ class AccessRecord {
       // 创建索引
       await this.createIndexes();
     } catch (error) {
-      console.error('MongoDB connection error:', error);
+
       throw error;
     }
   }
@@ -59,10 +59,8 @@ class AccessRecord {
       await this.collection.createIndex({ status: 1 });
       await this.collection.createIndex({ firstAccessTime: 1 });
       await this.collection.createIndex({ updateTime: 1 });
-
-      console.log('Database indexes created successfully');
     } catch (error) {
-      console.error('Error creating indexes:', error);
+
       throw error;
     }
   }
@@ -74,7 +72,7 @@ class AccessRecord {
     try {
       return await this.collection.findOne({ uniqueId });
     } catch (error) {
-      console.error('Error finding record:', error);
+
       throw error;
     }
   }
@@ -91,12 +89,12 @@ class AccessRecord {
         firstAccessTime: now,
         accessCount: 1,
         updateTime: now,
+        createDate: this.formatTime(now),
       };
 
       const result = await this.collection.insertOne(record);
       return { ...record, _id: result.insertedId };
     } catch (error) {
-      console.error('Error creating record:', error);
       throw error;
     }
   }
@@ -119,7 +117,6 @@ class AccessRecord {
 
       return result;
     } catch (error) {
-      console.error('Error updating record:', error);
       throw error;
     }
   }
@@ -140,7 +137,7 @@ class AccessRecord {
 
       return result;
     } catch (error) {
-      console.error('Error incrementing access count:', error);
+
       throw error;
     }
   }
@@ -161,7 +158,7 @@ class AccessRecord {
     try {
       return await this.collection.find({}).sort({ updateTime: -1 }).limit(limit).toArray();
     } catch (error) {
-      console.error('Error finding all records:', error);
+
       throw error;
     }
   }
@@ -174,7 +171,7 @@ class AccessRecord {
       const result = await this.collection.deleteOne({ uniqueId });
       return result;
     } catch (error) {
-      console.error('Error deleting record:', error);
+
       throw error;
     }
   }
@@ -185,7 +182,25 @@ class AccessRecord {
   async close() {
     if (this.client) {
       await this.client.close();
-      console.log('MongoDB connection closed');
+    }
+  }
+  /**
+   * 时间格式化
+   */
+  formatTime(timestamp) {
+    try {
+      const date = new Date(timestamp);
+
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+
+      return `${year}/${month}/${day}`;
+    } catch (error) {
+      return new Date(timestamp).toISOString().replace('T', ' ').split('.')[0];
     }
   }
 }
