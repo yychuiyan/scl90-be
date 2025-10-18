@@ -24,7 +24,6 @@ class AccessRecord {
       // 创建索引
       await this.createIndexes();
     } catch (error) {
-
       throw error;
     }
   }
@@ -60,7 +59,6 @@ class AccessRecord {
       await this.collection.createIndex({ firstAccessTime: 1 });
       await this.collection.createIndex({ updateTime: 1 });
     } catch (error) {
-
       throw error;
     }
   }
@@ -72,11 +70,87 @@ class AccessRecord {
     try {
       return await this.collection.findOne({ uniqueId });
     } catch (error) {
-
       throw error;
     }
   }
+  /**
+   * 批量创建访问
+   */
+async batchCreate(uniqueIds) {
+  try {
+    if (!Array.isArray(uniqueIds) || uniqueIds.length === 0) {
+      throw new Error('uniqueIds 必须是非空数组');
+    }
 
+    const now = Date.now();
+    const formattedTime = this.formatTime(now);
+
+    // 去重处理
+    const uniqueIdsSet = [...new Set(uniqueIds)];
+
+    // 检查哪些记录已经存在
+    const existingRecords = await this.collection
+      .find({
+        uniqueId: { $in: uniqueIdsSet },
+      })
+      .project({ uniqueId: 1 })
+      .toArray();
+
+    const existingUniqueIds = existingRecords.map(record => record.uniqueId);
+    const newUniqueIds = uniqueIdsSet.filter(id => !existingUniqueIds.includes(id));
+
+    if (newUniqueIds.length === 0) {
+      return {
+        success: true,
+        message: '所有记录已存在，没有新记录被创建',
+        total: uniqueIdsSet.length,
+        created: 0,
+        skipped: uniqueIdsSet.length,
+        skippedIds: existingUniqueIds,
+        createdIds: [],
+      };
+    }
+
+    // 构建批量插入文档
+    const documents = newUniqueIds.map(uniqueId => ({
+      uniqueId,
+      status: 'active',
+      firstAccessTime: now,
+      createDate: formattedTime,
+      accessCount: 1,
+      updateTime: now,
+    }));
+
+    // 执行批量插入
+    const result = await this.collection.insertMany(documents);
+
+    console.log(`✅ 批量创建成功: 创建了 ${newUniqueIds.length} 条记录`);
+
+    return {
+      success: true,
+      message: `批量创建成功，创建了 ${newUniqueIds.length} 条记录`,
+      total: uniqueIdsSet.length,
+      created: newUniqueIds.length,
+      skipped: existingUniqueIds.length,
+      skippedIds: existingUniqueIds,
+      createdIds: newUniqueIds,
+      insertedIds: result.insertedIds,
+    };
+  } catch (error) {
+    console.error('❌ 批量创建记录错误:', error);
+
+    // 处理重复键错误（批量插入时可能发生）
+    if (error.code === 11000) {
+      return {
+        success: false,
+        message: '批量创建过程中发现重复记录',
+        error: '存在重复的唯一标识',
+      };
+    }
+
+    throw error;
+  }
+}
   /**
    * 创建新的访问记录
    */
@@ -137,7 +211,6 @@ class AccessRecord {
 
       return result;
     } catch (error) {
-
       throw error;
     }
   }
@@ -158,7 +231,6 @@ class AccessRecord {
     try {
       return await this.collection.find({}).sort({ updateTime: -1 }).limit(limit).toArray();
     } catch (error) {
-
       throw error;
     }
   }
@@ -171,7 +243,6 @@ class AccessRecord {
       const result = await this.collection.deleteOne({ uniqueId });
       return result;
     } catch (error) {
-
       throw error;
     }
   }

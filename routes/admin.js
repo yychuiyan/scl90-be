@@ -119,7 +119,59 @@ router.get('/:uniqueId', async (req, res) => {
     });
   }
 });
+/**
+ * 批量创建访问记录
+ * POST /access/batch
+ * Body: { uniqueIds: ['id1', 'id2', 'id3'] }
+ */
+router.post('/batch', async (req, res) => {
+  try {
+    const { uniqueIds } = req.body;
 
+    // 参数验证
+    if (!uniqueIds || !Array.isArray(uniqueIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'uniqueIds 是必须的且必须是数组',
+      });
+    }
+
+    if (uniqueIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'uniqueIds 数组不能为空',
+      });
+    }
+
+    // 验证数组中的每个元素
+    const invalidIds = uniqueIds.filter(id => !id || typeof id !== 'string' || id.trim() === '');
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'uniqueIds 中包含无效的唯一标识',
+        invalidIds,
+      });
+    }
+
+    console.log(`批量创建请求: ${uniqueIds.length} 个唯一标识`);
+
+    // 调用批量创建方法
+    const result = await AccessRecord.batchCreate(uniqueIds.map(id => id.trim()));
+
+    res.status(result.created > 0 ? 201 : 200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error('批量创建路由错误:', error);
+
+    res.status(500).json({
+      success: false,
+      message: '批量创建失败',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
 /**
  * 获取记录信息
  * GET /access/:uniqueId/info
