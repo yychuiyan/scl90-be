@@ -37,42 +37,42 @@ router.get('/:uniqueId', async (req, res) => {
     let record = await AccessRecord.findByUniqueId(uniqueId);
 
     if (record) {
+      return res.status(200).json({
+        success: true,
+        message: '访问成功',
+        data: {
+          uniqueId,
+          status: record.status,
+          accessCount: record.accessCount,
+          isAccessStatus: record.isAccessStatus,
+          firstAccessTime: record.firstAccessTime && new Date(record.firstAccessTime).toISOString(),
+          updateTime: new Date(record.updateTime).toISOString(),
+          createTime: record.createTime,
+        },
+      });
       // 检查是否在24小时内
-      const within24Hours = AccessRecord.isWithin24Hours(record);
-      if (within24Hours) {
-        return res.status(200).json({
-          success: true,
-          message: '访问成功',
-          data: {
-            uniqueId,
-            status: 'active',
-            accessCount: record.accessCount,
-            firstAccessTime:
-              record.firstAccessTime && new Date(record.firstAccessTime).toISOString(),
-            updateTime: new Date(record.updateTime).toISOString(),
-            createTime: record.createTime,
-            isWithin24Hours: true,
-          },
-        });
-      } else {
-        // 超过24小时，更新状态为失效
-        const updatedRestul = await AccessRecord.update(uniqueId, { status: 'expired' });
-        // 从更新结果中提取文档
-        const updatedRecord = extractDocumentFromResult(updatedRestul);
+      // const within24Hours = AccessRecord.isWithin24Hours(record);
+      // if (within24Hours) {
 
-        return res.status(200).json({
-          success: false,
-          message: '访问已失效（超过24小时）',
-          data: {
-            uniqueId,
-            status: 'expired',
-            accessCount: updatedRecord.accessCount,
-            firstAccessTime: new Date(updatedRecord.firstAccessTime).toISOString(),
-            updateTime: new Date(updatedRecord.updateTime).toISOString(),
-            isWithin24Hours: false,
-          },
-        });
-      }
+      // } else {
+      // 超过24小时，更新状态为失效
+      // const updatedRestul = await AccessRecord.update(uniqueId, { status: 'expired' });
+      // // 从更新结果中提取文档
+      // const updatedRecord = extractDocumentFromResult(updatedRestul);
+
+      // return res.status(200).json({
+      //   success: false,
+      //   message: '访问已失效（超过24小时）',
+      //   data: {
+      //     uniqueId,
+      //     status: 'expired',
+      //     accessCount: updatedRecord.accessCount,
+      //     firstAccessTime: new Date(updatedRecord.firstAccessTime).toISOString(),
+      //     updateTime: new Date(updatedRecord.updateTime).toISOString(),
+      //     isWithin24Hours: false,
+      //   },
+      // });
+      // }
     } else {
       // 记录不存在，创建新记录
       const newRecord = await AccessRecord.create(uniqueId);
