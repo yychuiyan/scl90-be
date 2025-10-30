@@ -58,6 +58,7 @@ class AccessRecord {
       await this.collection.createIndex({ status: 1 });
       await this.collection.createIndex({ firstAccessTime: 1 });
       await this.collection.createIndex({ updateTime: 1 });
+      await this.collection.createIndex({ isAccessStatus: 1 });
     } catch (error) {
       throw error;
     }
@@ -76,81 +77,82 @@ class AccessRecord {
   /**
    * 批量创建访问
    */
-async batchCreate(uniqueIds) {
-  try {
-    if (!Array.isArray(uniqueIds) || uniqueIds.length === 0) {
-      throw new Error('uniqueIds 必须是非空数组');
-    }
+  async batchCreate(uniqueIds) {
+    try {
+      if (!Array.isArray(uniqueIds) || uniqueIds.length === 0) {
+        throw new Error('uniqueIds 必须是非空数组');
+      }
 
-    const now = Date.now();
-    const formattedTime = this.formatTime(now);
+      const now = Date.now();
+      const formattedTime = this.formatTime(now);
 
-    // 去重处理
-    const uniqueIdsSet = [...new Set(uniqueIds)];
+      // 去重处理
+      const uniqueIdsSet = [...new Set(uniqueIds)];
 
-    // 检查哪些记录已经存在
-    const existingRecords = await this.collection
-      .find({
-        uniqueId: { $in: uniqueIdsSet },
-      })
-      .project({ uniqueId: 1 })
-      .toArray();
+      // 检查哪些记录已经存在
+      const existingRecords = await this.collection
+        .find({
+          uniqueId: { $in: uniqueIdsSet },
+        })
+        .project({ uniqueId: 1 })
+        .toArray();
 
-    const existingUniqueIds = existingRecords.map(record => record.uniqueId);
-    const newUniqueIds = uniqueIdsSet.filter(id => !existingUniqueIds.includes(id));
+      const existingUniqueIds = existingRecords.map(record => record.uniqueId);
+      const newUniqueIds = uniqueIdsSet.filter(id => !existingUniqueIds.includes(id));
 
-    if (newUniqueIds.length === 0) {
+      if (newUniqueIds.length === 0) {
+        return {
+          success: true,
+          message: '所有记录已存在，没有新记录被创建',
+          total: uniqueIdsSet.length,
+          created: 0,
+          skipped: uniqueIdsSet.length,
+          skippedIds: existingUniqueIds,
+          createdIds: [],
+        };
+      }
+
+      // 构建批量插入文档
+      const documents = newUniqueIds.map(uniqueId => ({
+        uniqueId,
+        status: 'active',
+        firstAccessTime: 0,
+        createDate: formattedTime,
+        accessCount: 0,
+        isAccessStatus: false,
+        updateTime: now,
+      }));
+
+      // 执行批量插入
+      const result = await this.collection.insertMany(documents);
+
+      console.log(`✅ 批量创建成功: 创建了 ${newUniqueIds.length} 条记录`);
+
       return {
         success: true,
-        message: '所有记录已存在，没有新记录被创建',
+        message: `批量创建成功，创建了 ${newUniqueIds.length} 条记录`,
         total: uniqueIdsSet.length,
-        created: 0,
-        skipped: uniqueIdsSet.length,
+        created: newUniqueIds.length,
+        skipped: existingUniqueIds.length,
         skippedIds: existingUniqueIds,
-        createdIds: [],
+        createdIds: newUniqueIds,
+        insertedIds: result.insertedIds,
       };
+    } catch (error) {
+      console.error('❌ 批量创建记录错误:', error);
+
+      // 处理重复键错误（批量插入时可能发生）
+      if (error.code === 11000) {
+        return {
+          success: false,
+          message: '批量创建过程中发现重复记录',
+          error: '存在重复的唯一标识',
+        };
+      }
+
+      throw error;
     }
-
-    // 构建批量插入文档
-    const documents = newUniqueIds.map(uniqueId => ({
-      uniqueId,
-      status: 'active',
-      firstAccessTime: now,
-      createDate: formattedTime,
-      accessCount: 1,
-      updateTime: now,
-    }));
-
-    // 执行批量插入
-    const result = await this.collection.insertMany(documents);
-
-    console.log(`✅ 批量创建成功: 创建了 ${newUniqueIds.length} 条记录`);
-
-    return {
-      success: true,
-      message: `批量创建成功，创建了 ${newUniqueIds.length} 条记录`,
-      total: uniqueIdsSet.length,
-      created: newUniqueIds.length,
-      skipped: existingUniqueIds.length,
-      skippedIds: existingUniqueIds,
-      createdIds: newUniqueIds,
-      insertedIds: result.insertedIds,
-    };
-  } catch (error) {
-    console.error('❌ 批量创建记录错误:', error);
-
-    // 处理重复键错误（批量插入时可能发生）
-    if (error.code === 11000) {
-      return {
-        success: false,
-        message: '批量创建过程中发现重复记录',
-        error: '存在重复的唯一标识',
-      };
-    }
-
-    throw error;
   }
-}
   /**
    * 创建新的访问记录
    */
@@ -160,8 +162,9 @@ async batchCreate(uniqueIds) {
       const record = {
         uniqueId,
         status: 'active',
-        firstAccessTime: now,
-        accessCount: 1,
+        firstAccessTime: 0,
+        accessCount: 0,
+        isAccessStatus: false,
         updateTime: now,
         createDate: this.formatTime(now),
       };
@@ -172,7 +175,54 @@ async batchCreate(uniqueIds) {
       throw error;
     }
   }
+  /**
+   * 访问记录（处理首次访问和非首次访问）
+   */
+  async accessRecord(uniqueId) {
+    try {
+      const now = Date.now();
 
+      // 查找现有记录
+      const existingRecord = await this.collection.findOne({ uniqueId });
+
+      if (!existingRecord) {
+        // 记录不存在，创建新记录
+        return await this.create(uniqueId);
+      }
+
+      let updateOperation = {};
+
+      // 如果是首次访问
+      if (!existingRecord.isAccessStatus) {
+        updateOperation = {
+          $set: {
+            isAccessStatus: true,
+            firstAccessTime: now, // 开始计时
+            accessCount: 1,
+            updateTime: now,
+          },
+        };
+        console.log(`首次访问: ${uniqueId}, 开始24小时计时`);
+      } else {
+        // 非首次访问，增加访问次数
+        updateOperation = {
+          $inc: { accessCount: 1 },
+          $set: {
+            updateTime: now,
+            // 更新状态，检查是否超过24小时
+            status: this.isWithin24Hours(existingRecord) ? 'active' : 'expired',
+          },
+        };
+      }
+
+      const result = await this.collection.findOneAndUpdate({ uniqueId }, updateOperation, {
+        returnDocument: 'after',
+      });
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }
   /**
    * 更新访问记录
    */
@@ -196,36 +246,25 @@ async batchCreate(uniqueIds) {
   }
 
   /**
-   * 增加访问次数
+   * 检查记录是否在24小时内
    */
-  async incrementAccessCount(uniqueId) {
+  isWithin24Hours(record) {
     try {
-      const result = await this.collection.findOneAndUpdate(
-        { uniqueId },
-        {
-          $inc: { accessCount: 1 },
-          $set: { updateTime: Date.now() },
-        },
-        { returnDocument: 'after' }
-      );
-
-      return result;
+      // 如果未访问，直接返回 true（允许访问）
+      if (!record.isAccessStatus) {
+        return true;
+      }
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const isWithin = now - record.firstAccessTime <= twentyFourHours;
+      return isWithin;
     } catch (error) {
-      throw error;
+      return false;
     }
   }
 
   /**
-   * 检查记录是否在24小时内
-   */
-  isWithin24Hours(record) {
-    const now = Date.now();
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-    return now - record.firstAccessTime <= twentyFourHours;
-  }
-
-  /**
-   * 获取所有记录（用于调试和管理）
+   * 获取所有记录
    */
   async findAll(limit = 50) {
     try {
@@ -236,7 +275,7 @@ async batchCreate(uniqueIds) {
   }
 
   /**
-   * 删除记录（用于测试）
+   * 删除记录
    */
   async deleteByUniqueId(uniqueId) {
     try {
@@ -246,7 +285,35 @@ async batchCreate(uniqueIds) {
       throw error;
     }
   }
+  /**
+   * 获取访问状态统计
+   */
+  async getAccessStats() {
+    try {
+      const totalRecords = await this.collection.countDocuments();
+      const accessedRecords = await this.collection.countDocuments({ isAccessStatus: true });
+      const notAccessedRecords = await this.collection.countDocuments({ isAccessStatus: false });
 
+      // 获取已访问记录中超过24小时的记录数
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const expiredRecords = await this.collection.countDocuments({
+        isAccessStatus: true,
+        firstAccessTime: { $lt: now - twentyFourHours },
+      });
+
+      return {
+        total: totalRecords,
+        accessed: accessedRecords,
+        notAccessed: notAccessedRecords,
+        expired: expiredRecords,
+        active: accessedRecords - expiredRecords,
+      };
+    } catch (error) {
+      console.error('❌ 获取访问统计错误:', error);
+      throw error;
+    }
+  }
   /**
    * 关闭数据库连接
    */

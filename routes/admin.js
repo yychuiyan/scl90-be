@@ -37,32 +37,20 @@ router.get('/:uniqueId', async (req, res) => {
     let record = await AccessRecord.findByUniqueId(uniqueId);
 
     if (record) {
-      // 记录存在，检查是否在24小时内
+      // 检查是否在24小时内
       const within24Hours = AccessRecord.isWithin24Hours(record);
-      // 记录存在，检查是否在24小时内
       if (within24Hours) {
-        // 在24小时内，增加访问次数
-        const updateResult = await AccessRecord.incrementAccessCount(uniqueId);
-        if (!updateResult) {
-          throw new Error('更新错误！');
-        }
-        // 从更新结果中提取文档
-        const updatedRecord = extractDocumentFromResult(updateResult);
-
-        if (!updatedRecord) {
-          throw new Error('更新数据查询失败！');
-        }
-
         return res.status(200).json({
           success: true,
           message: '访问成功',
           data: {
             uniqueId,
             status: 'active',
-            accessCount: updatedRecord.accessCount,
-            firstAccessTime: new Date(updatedRecord.firstAccessTime).toISOString(),
-            updateTime: new Date(updatedRecord.updateTime).toISOString(),
-            createTime: updatedRecord.createTime,
+            accessCount: record.accessCount,
+            firstAccessTime:
+              record.firstAccessTime && new Date(record.firstAccessTime).toISOString(),
+            updateTime: new Date(record.updateTime).toISOString(),
+            createTime: record.createTime,
             isWithin24Hours: true,
           },
         });
@@ -72,7 +60,7 @@ router.get('/:uniqueId', async (req, res) => {
         // 从更新结果中提取文档
         const updatedRecord = extractDocumentFromResult(updatedRestul);
 
-        return res.status(403).json({
+        return res.status(200).json({
           success: false,
           message: '访问已失效（超过24小时）',
           data: {
@@ -95,11 +83,12 @@ router.get('/:uniqueId', async (req, res) => {
         data: {
           uniqueId,
           status: 'active',
-          accessCount: 1,
-          firstAccessTime: new Date(newRecord.firstAccessTime).toISOString(),
+          accessCount: 0,
+          firstAccessTime: '',
           updateTime: new Date(newRecord.updateTime).toISOString(),
           createDate: AccessRecord.formatTime(newRecord.createDate),
           isWithin24Hours: true,
+          isAccessStatus: false,
         },
       });
     }

@@ -37,13 +37,12 @@ router.get('/:uniqueId', async (req, res) => {
     let record = await AccessRecord.findByUniqueId(uniqueId);
 
     if (record) {
-      // 记录存在，检查是否在24小时内
+      // 检查是否在24小时内
       const within24Hours = AccessRecord.isWithin24Hours(record);
-      console.log(`Within 24 hours: ${within24Hours}`);
-      // 记录存在，检查是否在24小时内
+
       if (within24Hours) {
         // 在24小时内，增加访问次数
-        const updateResult = await AccessRecord.incrementAccessCount(uniqueId);
+        const updateResult = await AccessRecord.accessRecord(uniqueId);
         if (!updateResult) {
           throw new Error('Failed to update access count');
         }
@@ -54,8 +53,6 @@ router.get('/:uniqueId', async (req, res) => {
           throw new Error('No document found in update result');
         }
 
-        console.log('Updated document:', updatedRecord);
-        console.log('updatedDocument.firstAccessTime', updatedRecord.firstAccessTime);
         return res.status(200).json({
           success: true,
           message: '访问成功',
@@ -96,7 +93,6 @@ router.get('/:uniqueId', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Access route error:', error);
     // 处理重复键错误（唯一标识冲突）
     if (error.code === 11000) {
       return res.status(409).json({
