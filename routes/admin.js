@@ -109,6 +109,45 @@ router.get('/:uniqueId', async (req, res) => {
   }
 });
 /**
+ * 创建单个访问记录
+ * POST /access
+ * Body: { uniqueId: 'your-unique-id' }
+ */
+router.post('/insert', async (req, res) => {
+  try {
+    const { uniqueId } = req.body;
+
+    // 参数验证
+    if (!uniqueId || typeof uniqueId !== 'string' || uniqueId.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'uniqueId 是必须的且必须是有效的字符串',
+      });
+    }
+
+    const trimmedId = uniqueId.trim();
+    console.log(`创建单个访问记录请求: uniqueId = ${trimmedId}`);
+
+    // 调用单个创建方法
+    // 假设 AccessRecord.create 方法接收一个 uniqueId 字符串并返回创建好的记录对象
+    const createdRecord = await AccessRecord.create(trimmedId);
+
+    // 如果创建成功，返回 201 Created 状态码和新创建的记录
+    res.status(201).json({
+      success: true,
+      data: createdRecord,
+    });
+  } catch (error) {
+    console.error('创建单个访问记录路由错误:', error);
+
+    res.status(500).json({
+      success: false,
+      message: '创建访问记录失败',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+/**
  * 批量创建访问记录
  * POST /access/batch
  * Body: { uniqueIds: ['id1', 'id2', 'id3'] }
